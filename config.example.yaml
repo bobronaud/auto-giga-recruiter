@@ -1,0 +1,65 @@
+# Скопируй в config.yaml (npm start -- init). config.yaml в .gitignore.
+
+telegram:
+  # web     — через Telegram Web в браузере (Playwright). Вход по QR-коду, api_id/api_hash НЕ нужны.
+  # mtproto — через GramJS, нужны TG_API_ID/TG_API_HASH с my.telegram.org.
+  driver: "web"
+  web:
+    url: "https://web.telegram.org/k/"
+    headless: true       # false — показать окно браузера (отладка; в WSL нужен WSLg)
+    pollMs: 700          # как часто проверять новые сообщения
+    selectors: {}        # переопределение CSS-селекторов, если Telegram поменял вёрстку
+    #   bubble: ".bubble[data-mid]"
+    #   input: '.input-message-input[contenteditable="true"]'
+
+bot:
+  # username бота ГигаРекрутер без @ — проверь в Telegram и уточни через `npm run recon`
+  username: "GigaRecruiterBot"
+  startCommand: "/start"
+
+answers:
+  maxChars: 800          # жёсткий лимит символов в одном ответе
+  minChars: 0            # минимальная длина (0 — без ограничения)
+  language: "ru"
+  tone: "professional"   # professional | friendly | concise
+  honesty: "strict"      # strict — только факты из резюме; flexible — недостающие детали можно додумать в рамках резюме
+  # Всё, чего нет в резюме, но что может спросить интервьюер:
+  extraInstructions: |
+    Зарплатные ожидания: обсуждаются, ориентируюсь на рынок.
+    Формат работы: предпочитаю гибрид или удалёнку.
+    Готов выйти через 2 недели.
+
+llm:
+  # auto        — API, если в .env задан ANTHROPIC_API_KEY, иначе подписка через Claude Code
+  # claude-code — локальный `claude -p` по твоей подписке Claude (Pro/Max), ключ API не нужен
+  # api         — Anthropic API по ключу, оплата по токенам
+  provider: "auto"
+  model: "claude-opus-5" # если модель недоступна на твоём тарифе — claude-sonnet-5
+  effort: "medium"       # low | medium | high | xhigh | max
+  maxTokens: 8000        # только для api
+  fallbacks: true        # только для api: серверный fallback на другую модель при отказе
+
+behavior:
+  mode: "auto"           # auto — без подтверждений; confirm — одобрять каждый ответ
+  typingDelay:           # имитация набора текста: min..max, пропорционально длине
+    minMs: 3000
+    maxMs: 12000
+    perCharMs: 25
+  botIdleMs: 2500        # тишина от бота перед ответом (бот может слать несколько сообщений подряд)
+  botResponseTimeoutSec: 180
+  maxTurns: 60           # предохранитель от бесконечного цикла
+  questionTimeoutSec: 0  # если у бота таймер на ответ — укажи его, задержки подстроятся
+
+resumes:
+  dir: "./resumes"
+  # Резюме выбирается само по стеку вакансии: resume.vue.md для Vue/Nuxt, resume.react.md для React/Next.js.
+  # default: "resume.react.md"  # фолбэк, если стек не понятен (если не задано: резюме с «react» в имени)
+  perVacancy: []         # регулярка по названию вакансии → файл резюме, пример ниже
+    # - match: "(?i)frontend|react"
+    #   resume: "frontend.md"
+    # - match: "(?i)backend|java|go"
+    #   resume: "backend.md"
+
+logging:
+  saveTranscripts: true
+  dir: "./data"          # сессия, транскрипты, дампы recon (в .gitignore)

@@ -1,0 +1,19 @@
+# --- secrets & personal data (NEVER commit) ---
+.env
+.env.*
+!.env.example
+config.yaml
+config.yml
+data/
+*.session
+session*
+resumes/*
+!resumes/example.md
+!resumes/README.md
+
+# --- build ---
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store

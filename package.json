@@ -1,0 +1,59 @@
+{
+  "name": "auto-giga-recruiter",
+  "version": "0.1.0",
+  "description": "CLI that passes GigaRecruiter Telegram AI interviews on your behalf using Claude and your resumes",
+  "scripts": {
+    "setup": "playwright install chromium",
+    "start": "tsx src/cli.ts",
+    "login": "tsx src/cli.ts login",
+    "recon": "tsx src/cli.ts recon",
+    "interview": "tsx src/cli.ts interview",
+    "resumes": "tsx src/cli.ts resumes",
+    "logout": "tsx src/cli.ts logout",
+    "build": "tsup src/cli.ts --format esm --target node20 --clean",
+    "typecheck": "tsc -p .",
+    "test": "vitest run",
+    "secretlint": "secretlint \"**/*\"",
+    "prepare": "simple-git-hooks"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@clack/prompts": "^1.8.1",
+    "boxen": "^9.0.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^15.0.0",
+    "dotenv": "^18.0.3",
+    "jsqr": "^1.4.0",
+    "picocolors": "^1.1.1",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
+    "qrcode": "^1.5.4",
+    "telegram": "^2.26.22",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@secretlint/secretlint-rule-preset-recommend": "^13.0.5",
+    "@types/node": "^26.6.2",
+    "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.6",
+    "secretlint": "^13.0.5",
+    "simple-git-hooks": "^2.14.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "giga": "dist/cli.js"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "node scripts/guard-staged.mjs"
+  }
+}
