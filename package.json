@@ -10,6 +10,7 @@
     "interview": "tsx src/cli.ts interview",
     "resumes": "tsx src/cli.ts resumes",
     "logout": "tsx src/cli.ts logout",
+    "help": "tsx src/cli.ts help",
     "build": "tsup src/cli.ts --format esm --target node20 --clean",
     "typecheck": "tsc -p .",
     "test": "vitest run",

@@ -2,7 +2,7 @@
 import { copyFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import * as p from "@clack/prompts";
-import { Command } from "commander";
+import { Command, type Option } from "commander";
 import pc from "picocolors";
 import { Api } from "telegram";
 import { ConfigError, loadConfig, loadEnv } from "./config/load.js";
@@ -26,7 +26,9 @@ import { maskPhone, redactError } from "./util/redact.js";
 const program = new Command()
   .name("giga")
   .description("Автопрохождение ИИ-интервью в ГигаРекрутере (Telegram) с помощью Claude")
-  .option("-c, --config <path>", "путь к конфигу", "config.yaml");
+  .option("-c, --config <path>", "путь к конфигу", "config.yaml")
+  .helpOption("-h, --help", "показать справку")
+  .helpCommand(false);
 
 // ---------- инфраструктура ----------
 
@@ -380,6 +382,43 @@ async function runBatch(
     `Пакет: пройдено ${results.length}`,
   );
 }
+
+/** Команда запуска: `npm run <name>`, если есть такой скрипт, иначе `npm start -- <name>`. */
+function runHint(name: string): string {
+  return ["login", "recon", "interview", "resumes", "logout", "help"].includes(name) ? `npm run ${name}` : `npm start -- ${name}`;
+}
+
+function printCommandHelp(cmd: Command) {
+  const byDefault = (o: Option) =>
+    o.defaultValue !== undefined && typeof o.defaultValue !== "boolean" ? pc.dim(` (по умолчанию: ${o.defaultValue})`) : "";
+  const options = cmd.options.filter((o) => !o.hidden && o.long !== "--help");
+  const pad = Math.max(0, ...options.map((o) => o.flags.length));
+  const lines = [
+    `${pc.bold(pc.green(cmd.name()))} ${pc.dim("—")} ${cmd.description()}`,
+    `  ${pc.dim("запуск:")} ${pc.cyan(runHint(cmd.name()))}${options.length ? pc.cyan(" -- [опции]") : ""}`,
+    ...options.map((o) => `  ${pc.yellow(o.flags.padEnd(pad))}  ${o.description}${byDefault(o)}`),
+  ];
+  console.log(lines.join("\n"));
+}
+
+program
+  .command("help [command]")
+  .description("показать все команды с подсказками (или подробно одну)")
+  .action((name?: string) => {
+    const commands = program.commands;
+    if (name) {
+      const cmd = commands.find((c) => c.name() === name || c.aliases().includes(name));
+      if (!cmd) throw new ConfigError(`Нет команды «${name}». Доступные: ${commands.map((c) => c.name()).join(", ")}`);
+      return printCommandHelp(cmd);
+    }
+    console.log(`${program.description()}\n`);
+    for (const cmd of commands) {
+      printCommandHelp(cmd);
+      console.log();
+    }
+    console.log(`${pc.bold("Общие опции:")} ${pc.yellow("-c, --config <path>")} путь к конфигу ${pc.dim("(по умолчанию: config.yaml)")}`);
+    console.log(pc.dim(`Подробно об одной команде: ${runHint("help")} -- <команда>`));
+  });
 
 // ---------- запуск ----------
 

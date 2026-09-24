@@ -69,6 +69,7 @@ npm run interview -- --confirm             # каждый ответ одобр�
 npm run interview -- --resume backend.md   # явно указать резюме (по умолчанию выбирается по стеку вакансии)
 npm run interview -- --no-start            # продолжить с текущего места чата, без /start
 
+npm run help                               # все команды и их опции (npm run help -- interview — одна команда)
 npm run resumes                            # список резюме и их размер в токенах
 npm run logout                             # удалить сессию с диска
 ```
