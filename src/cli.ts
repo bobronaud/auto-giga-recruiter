@@ -267,12 +267,12 @@ program
   .description("разведка: логировать сообщения и кнопки бота, чтобы изучить его формат")
   .option("-i, --interactive", "управлять ботом вручную (кнопки/текст)")
   .option("--history <n>", "показать последние N сообщений чата", "10")
-  .option("--no-start", "не отправлять /start")
+  .option("--no-send", "не отправлять команду списка вакансий (/change_vacancy)")
   .option("--headful", "показать окно браузера (web-драйвер)")
-  .action(async (o: { interactive?: boolean; history: string; start: boolean; headful?: boolean }) => {
+  .action(async (o: { interactive?: boolean; history: string; send: boolean; headful?: boolean }) => {
     const signal = interruptSignal();
     const path = await withChat(
-      (chat, c) => runRecon(chat, c, { interactive: Boolean(o.interactive), history: Number(o.history), start: o.start, signal }),
+      (chat, c) => runRecon(chat, c, { interactive: Boolean(o.interactive), history: Number(o.history), send: o.send, signal }),
       { headless: o.headful ? false : undefined },
     );
     p.outro(path ? `Дамп сохранён: ${pc.dim(path)}` : "Готово");
@@ -287,9 +287,8 @@ program
   .option("--confirm", "подтверждать каждый ответ вручную")
   .option("--auto", "полностью автономно (перекрывает behavior.mode)")
   .option("--dry-run", "офлайн-симуляция: интервьюера играешь ты, в Telegram ничего не уходит")
-  .option("--no-start", "не отправлять /start (продолжить с текущего места чата)")
   .option("--headful", "показать окно браузера (web-драйвер)")
-  .action(async (o: { vacancy?: string; resume?: string; all?: boolean; confirm?: boolean; auto?: boolean; dryRun?: boolean; start: boolean; headful?: boolean }) => {
+  .action(async (o: { vacancy?: string; resume?: string; all?: boolean; confirm?: boolean; auto?: boolean; dryRun?: boolean; headful?: boolean }) => {
     const c = cfg();
     const env = loadEnv();
     const mode = o.auto ? "auto" : o.confirm ? "confirm" : c.behavior.mode;
@@ -338,19 +337,16 @@ program
         };
 
         // После интервью возвращаемся в меню со списком вакансий, пока пользователь не выберет «Выйти»
-        let skipStart = !o.start;
         let batch = Boolean(o.all);
         let vacancy = o.vacancy;
         while (!signal.aborted) {
           if (batch) {
             await runBatch(chat, c2, signal, runOne);
             batch = false;
-            skipStart = true;
             continue;
           }
-          const nav = await navigateToVacancy(chat, c2, { vacancy, skipStart, signal });
+          const nav = await navigateToVacancy(chat, c2, { vacancy, signal });
           vacancy = undefined;
-          skipStart = true;
           if (nav === BATCH) batch = true;
           else if (nav) await runOne(nav);
           else break;
@@ -383,9 +379,13 @@ async function runBatch(
   );
 }
 
+/** npm-скрипты, имя которых отличается от имени команды. */
+const SCRIPT_ALIASES: Record<string, string> = { interview: "dev" };
+
 /** Команда запуска: `npm run <name>`, если есть такой скрипт, иначе `npm start -- <name>`. */
 function runHint(name: string): string {
-  return ["login", "recon", "interview", "resumes", "logout", "help"].includes(name) ? `npm run ${name}` : `npm start -- ${name}`;
+  if (SCRIPT_ALIASES[name]) return `npm run ${SCRIPT_ALIASES[name]}`;
+  return ["login", "recon", "resumes", "logout", "help"].includes(name) ? `npm run ${name}` : `npm start -- ${name}`;
 }
 
 function printCommandHelp(cmd: Command) {

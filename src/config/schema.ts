@@ -38,9 +38,10 @@ export const configSchema = z.object({
     .object({
       /** Username бота без @ */
       username: z.string().min(1).default("GigaRecruiterBot").transform((s) => s.trim().replace(/^@/, "")),
-      startCommand: z.string().default("/start"),
+      /** Команда, по которой бот присылает список вакансий (/start этот бот не поддерживает) */
+      vacancyCommand: z.string().default("/change_vacancy"),
     })
-    .default({ username: "GigaRecruiterBot", startCommand: "/start" }),
+    .default({ username: "GigaRecruiterBot", vacancyCommand: "/change_vacancy" }),
 
   answers: z
     .object({

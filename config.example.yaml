@@ -15,7 +15,8 @@ telegram:
 bot:
   # username бота ГигаРекрутер без @ — проверь в Telegram и уточни через `npm run recon`
   username: "GigaRecruiterBot"
-  startCommand: "/start"
+  # Команда со списком вакансий. /start в этом боте не работает
+  vacancyCommand: "/change_vacancy"
 
 answers:
   maxChars: 800          # жёсткий лимит символов в одном ответе

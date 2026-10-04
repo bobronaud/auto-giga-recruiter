@@ -41,12 +41,12 @@ function snapshot(m: BotMessage) {
 
 /**
  * Разведка: показывает всё, что присылает бот (текст, медиа, кнопки с callback data),
- * и сохраняет дамп в data/recon/. В обычном режиме ничего не отправляет, кроме /start.
+ * и сохраняет дамп в data/recon/. В обычном режиме ничего не отправляет, кроме команды списка вакансий (/change_vacancy).
  */
 export async function runRecon(
   chat: BotChatLike,
   cfg: AppConfig,
-  opts: { interactive: boolean; history: number; start: boolean; signal: AbortSignal },
+  opts: { interactive: boolean; history: number; send: boolean; signal: AbortSignal },
 ): Promise<string | undefined> {
   const dump = new Transcript(cfg.logging.dir, true, "recon");
   dump.meta = { bot: cfg.bot.username };
@@ -64,9 +64,10 @@ export async function runRecon(
     }
   }
 
-  if (opts.start) {
-    await chat.start(cfg.bot.startCommand);
-    actionLine("➤", `запустил бота (${cfg.bot.startCommand})`);
+  if (opts.send) {
+    // Не chat.start(): веб-драйвер там жмёт кнопку START, а /start бот не поддерживает
+    await chat.sendText(cfg.bot.vacancyCommand);
+    actionLine("➤", `запросил список вакансий (${cfg.bot.vacancyCommand})`);
   }
   await saveHtml();
 

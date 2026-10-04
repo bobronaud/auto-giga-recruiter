@@ -2,7 +2,7 @@ import * as p from "@clack/prompts";
 import pc from "picocolors";
 import type { AppConfig } from "../config/schema.js";
 import type { BotButton, BotChatLike, BotMessage } from "../telegram/types.js";
-import { askConfirm, askSelect, askText } from "../ui/ask.js";
+import { askConfirm, askSelect } from "../ui/ask.js";
 import { actionLine, botBubble } from "../ui/render.js";
 
 export interface NavigationResult {
@@ -87,27 +87,35 @@ async function pickVacancy(
   return { vacancy: res.label, context: [snippet, textOf(messages)].filter(Boolean).join("\n\n"), messages, notes };
 }
 
+/** Запрашивает список вакансий. Не через chat.start(): веб-драйвер там жмёт кнопку START, а /start бот не поддерживает. */
+async function openVacancyList(chat: BotChatLike, cfg: AppConfig): Promise<void> {
+  await chat.sendText(cfg.bot.vacancyCommand);
+  actionLine("➤", `запросил список вакансий (${cfg.bot.vacancyCommand})`);
+}
+
+/** Сколько раз повторно запрашивать список, если бот промолчал. */
+const LIST_RETRIES = 2;
+
 /**
- * Этап до интервью: /start → меню → выбор вакансии.
+ * Этап до интервью: /change_vacancy → меню → выбор вакансии.
  * С --vacancy кнопка выбирается автоматически, иначе интерактивно.
  * После выбора вакансии управление переходит к ИИ.
  */
 export async function navigateToVacancy(
   chat: BotChatLike,
   cfg: AppConfig,
-  opts: { vacancy?: string; skipStart?: boolean; signal: AbortSignal },
+  opts: { vacancy?: string; signal: AbortSignal },
 ): Promise<NavigationResult | typeof BATCH | undefined> {
   const wait = waiter(chat, cfg, opts.signal);
   let lastMsgs: BotMessage[] = [];
 
-  if (!opts.skipStart) {
-    await chat.start(cfg.bot.startCommand);
-    actionLine("➤", `запустил бота (${cfg.bot.startCommand})`);
+  // Бот периодически не отвечает — повторяем запрос, только если он промолчал.
+  // Ответ без кнопок (например, «нет других вакансий») — тоже ответ, повторять его незачем.
+  for (let attempt = 0; attempt <= LIST_RETRIES && !opts.signal.aborted; attempt++) {
+    if (attempt) p.log.warn(`Бот не ответил, запрашиваю список ещё раз (${attempt}/${LIST_RETRIES})`);
+    await openVacancyList(chat, cfg);
     lastMsgs = await wait();
-  } else {
-    // Показываем, на чём остановился чат
-    lastMsgs = (await chat.history(3)).filter((m) => !m.out);
-    lastMsgs.forEach((m) => botBubble(m, chat.title));
+    if (lastMsgs.length) break;
   }
 
   let autoMisses = 0;
@@ -150,34 +158,14 @@ export async function navigateToVacancy(
     const choice = await askSelect<string>("Что делаем?", [
       ...buttons.filter(usable).map((b) => ({ value: `btn:${b.index}`, label: `👆 ${b.text}` })),
       { value: BATCH, label: "🚀 Пройти все интервью подряд", hint: "по очереди, без участия" },
-      { value: "restart", label: `🔄 Открыть список вакансий заново (${cfg.bot.startCommand})` },
       { value: "ai", label: "🤖 Передать управление ИИ", hint: "интервью уже началось" },
-      { value: "text", label: "✍️  Написать боту текст" },
-      { value: "wait", label: "⏳ Подождать сообщений" },
       { value: "quit", label: "✖ Выйти" },
     ]);
 
     if (choice === "quit") return undefined;
     if (choice === BATCH) return BATCH;
-    if (choice === "wait") {
-      await refresh();
-      continue;
-    }
-    if (choice === "restart") {
-      await chat.start(cfg.bot.startCommand);
-      actionLine("➤", `запустил бота (${cfg.bot.startCommand})`);
-      await refresh();
-      continue;
-    }
-    if (choice === "text") {
-      await chat.sendText(await askText("Текст", { required: true }));
-      await refresh();
-      continue;
-    }
-    if (choice === "ai") {
-      const vacancy = (await askText("Название вакансии (можно пусто)")) || undefined;
-      return { vacancy, context: textOf(lastMsgs), messages: lastMsgs, notes: [] };
-    }
+    // Вакансия к этому моменту уже выбрана в чате — ИИ просто продолжает с текущего места
+    if (choice === "ai") return { context: textOf(lastMsgs), messages: lastMsgs, notes: [] };
     const btn = buttons.find((b) => `btn:${b.index}` === choice)!;
     if (isVacancyButton(btn) || (await askConfirm(`«${btn.text}» — это вакансия, по которой проходим интервью?`))) {
       return pickVacancy(chat, cfg, btn, lastMsgs, opts.signal);
@@ -248,7 +236,7 @@ export async function nextBatchVacancy(
       }
       if (!pages) return undefined;
     }
-    // Списка нет (или долистали до конца): пробуем меню «вакансии», затем /start
+    // Списка нет (или долистали до конца): пробуем меню «вакансии», затем /change_vacancy
     const menu = buttons.find((b) => usable(b) && /ваканс/i.test(b.text) && !isVacancyButton(b));
     if (!hasList && menu && menuClicks < 2) {
       menuClicks++;
@@ -257,11 +245,11 @@ export async function nextBatchVacancy(
       listMsgs = await wait();
       continue;
     }
-    if (restarts < 1) {
+    // Повторяем, только пока бот молчит: ответ без списка («нет других вакансий») — конец пакета
+    if (restarts < LIST_RETRIES && !(restarts && listMsgs.length)) {
       restarts++;
       pages = 0;
-      await chat.start(cfg.bot.startCommand);
-      actionLine("➤", `запустил бота (${cfg.bot.startCommand})`);
+      await openVacancyList(chat, cfg);
       listMsgs = await wait();
       continue;
     }

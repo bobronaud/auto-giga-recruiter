@@ -7,7 +7,7 @@
     "start": "tsx src/cli.ts",
     "login": "tsx src/cli.ts login",
     "recon": "tsx src/cli.ts recon",
-    "interview": "tsx src/cli.ts interview",
+    "dev": "tsx src/cli.ts interview",
     "resumes": "tsx src/cli.ts resumes",
     "logout": "tsx src/cli.ts logout",
     "help": "tsx src/cli.ts help",
