@@ -6,7 +6,13 @@ config.yaml
 config.yml
 data/
 *.session
-session*
+*.session-journal
+session.enc
+# на случай, если logging.dir указывает не в data/
+**/browser-profile/
+**/transcripts/
+**/recon/
+**/claude-workdir/
 resumes/*
 !resumes/example.md
 !resumes/README.md

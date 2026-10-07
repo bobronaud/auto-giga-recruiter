@@ -1,5 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import dotenv from "dotenv";
 import YAML from "yaml";
 import { z } from "zod";
@@ -30,7 +31,29 @@ export function loadConfig(path = "config.yaml"): AppConfig & { __source: string
   if (cfg.answers.minChars > cfg.answers.maxChars) {
     throw new ConfigError("answers.minChars не может быть больше maxChars");
   }
+  if (!isGitIgnored(cfg.logging.dir)) {
+    throw new ConfigError(
+      `logging.dir «${cfg.logging.dir}» не в .gitignore: там хранятся сессия Telegram и транскрипты. Добавь папку в .gitignore или укажи ./data`,
+    );
+  }
   return Object.assign(cfg, { __source: source });
+}
+
+/**
+ * Папка вне git-репозитория или игнорируется им. Без git (не установлен,
+ * не репозиторий) проверять нечего — считаем безопасной.
+ */
+export function isGitIgnored(dir: string): boolean {
+  const full = resolve(dir);
+  try {
+    // check-ignore требует существующий путь внутри рабочего дерева; проверяем файл внутри папки
+    execFileSync("git", ["check-ignore", "-q", join(full, ".probe")], { stdio: "ignore", cwd: process.cwd() });
+    return true;
+  } catch (err) {
+    const status = (err as { status?: number | null }).status;
+    // 1 — путь не игнорируется; 128 — вне репозитория / нет git; ENOENT — git не установлен
+    return status !== 1;
+  }
 }
 
 export function loadEnv(opts: { requireAnthropic?: boolean; requireTelegramApi?: boolean } = {}): AppEnv {

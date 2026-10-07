@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import YAML from "yaml";
 import { readFileSync } from "node:fs";
+import { isGitIgnored } from "../src/config/load.js";
 import { configSchema } from "../src/config/schema.js";
 
 describe("config", () => {
@@ -24,5 +25,11 @@ describe("config", () => {
 
   it("отклоняет неверный лимит", () => {
     expect(() => configSchema.parse({ answers: { maxChars: -5 } })).toThrow();
+  });
+
+  it("logging.dir: data/ игнорируется git, src/ — нет", () => {
+    expect(isGitIgnored("./data")).toBe(true);
+    expect(isGitIgnored("./logs/browser-profile")).toBe(true);
+    expect(isGitIgnored("./src")).toBe(false);
   });
 });
