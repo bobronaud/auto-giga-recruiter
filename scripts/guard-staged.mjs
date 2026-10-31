@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Pre-commit guard: blocks personal data / secrets from being committed,
 // then runs secretlint on the staged files.
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 
-const staged = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=ACMR"], {
-  encoding: "utf8",
-})
-  .split("\n")
-  .map((f) => f.trim())
-  .filter(Boolean);
+const { stdout } = await promisify(execFile)(
+  "git",
+  ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
+  { encoding: "utf8" },
+);
+const staged = stdout.split("\0").filter(Boolean);
 
 const forbidden = [
   { re: /(^|\/)\.env(\..+)?$/, allow: /\.env\.example$/, why: "env-файл с секретами" },
@@ -32,9 +33,13 @@ if (violations.length) {
 }
 
 if (staged.length) {
-  const res = spawnSync("npx", ["--no-install", "secretlint", ...staged], { stdio: "inherit" });
-  if (res.status !== 0) {
+  const status = await new Promise((resolve, reject) => {
+    const child = spawn("npx", ["--no-install", "secretlint", ...staged], { stdio: "inherit" });
+    child.once("error", reject);
+    child.once("close", (code) => resolve(code ?? 1));
+  });
+  if (status !== 0) {
     console.error("\n⛔ secretlint нашёл похожие на секреты строки. Коммит заблокирован.\n");
-    process.exit(res.status ?? 1);
+    process.exit(status);
   }
 }
