@@ -1,53 +1,67 @@
-# Контекст проекта auto-giga-recruiter
+# Работа с auto-giga-recruiter через Codex
 
-Этот файл применяется только к данному репозиторию и его подкаталогам.
+Инструкции применяются к репозиторию и его подкаталогам. Общайся с пользователем
+только по-русски; код, команды и идентификаторы оставляй как есть.
+
+## Проект
+
+TypeScript CLI для автоматизации текстовых интервью в Telegram. По умолчанию
+Telegram Web управляется через Playwright, альтернативный драйвер — mtproto
+через GramJS. Ответы генерирует установленный Codex CLI (`codex exec`) с входом
+через ChatGPT; отдельного API-провайдера и зависимости от Anthropic нет.
+
+`src/llm/` содержит адаптер Codex, схему действий и промпты; `src/interview/` —
+навигацию и цикл интервью; `src/telegram/` — драйверы чата. Поддерживай действия
+`reply`, `click`, `wait`, `finish`, историю диалога, доработку ответов и режим
+подтверждения. Старые настройки провайдера преобразуются в Codex при загрузке
+с предупреждением, без перезаписи пользовательского конфига.
+
+Для разработки запускай Codex из корня проекта. `AGENTS.md` — источник
+инструкций проекта. Пользовательская авторизация Codex остаётся вне проекта;
+не копируй её и не добавляй в репозиторий. Настройки интерактивного Codex
+не должны влиять на изолированный генератор ответов приложения.
+
+## Выполнение и проверки
+
+По умолчанию работай одним агентом. Перед делегированием проверь: если задача
+решается самостоятельно за приемлемое число шагов, части зависимы или цепочка
+содержит пять и более зависимых внешних вызовов — используй single. Иначе
+допустим team-centralized с центральным координатором, не более четырёх агентов.
+
+- `npm run typecheck` — проверка типов.
+- `npm test` — тесты приложения, в том числе адаптера Codex с подменой процесса.
+- `npm run build` — сборка CLI.
+- `node scripts/tests/guard-staged.mjs` — тесты pre-commit-защиты.
+
+Для проверки реальной генерации используй синтетические данные в отдельной
+временной папке. Не запускай интервью, рассылку сообщений или работу с личными
+резюме ради обычных проверок кода. Тесты не должны зависеть от авторизации Codex.
 
 ## Git
 
 Создавай локальные коммиты самостоятельно по мере завершения логических
 изменений. Выполняй push только по явному запросу пользователя. Не отключай
-pre-commit-проверки ради создания коммита.
+pre-commit-проверки ради создания коммита. Не добавляй в сообщения коммитов
+соавторство или атрибуцию Claude, Codex, OpenAI и других ИИ-инструментов.
+Сохраняй пользовательские изменения вне задачи.
 
-Проверка pre-commit-скрипта: `node scripts/tests/guard-staged.mjs`.
+## Конфиденциальность
 
-## Сведения, перенесённые из Claude Code
+Не читай содержимое `.env`, `.env.*`, `*.pem`, `*.key`, `data/**`,
+`~/.ssh/**`, `~/.aws/**`, `~/.config/gcloud/**`, `~/.kube/**`,
+`~/.docker/config.json`, `~/.npmrc`, `~/.config/gh/**`, `~/.git-credentials`.
+Не выводи окружение целиком. Проверяй наличие секретов по именам файлов и
+переменных без раскрытия значений. Не раскрывай личные резюме и сессии Telegram.
 
-Ниже сохранён полный `autoMode.environment` из пользовательского
-`~/.claude/settings.json`. Дата переноса: 2026-10-31.
+В `logging.dir` хранятся профиль браузера, сессия mtproto, транскрипты и дампы
+recon. Внутри репозитория эта папка должна игнорироваться Git. Профиль браузера
+не зашифрован; шифрование сессии mtproto зависит от `SESSION_PASSPHRASE`.
+Временные инструкции генератора находятся в `codex-workdir` и удаляются после
+вызова; сохраняй защиту этой папки и старых `claude-workdir` в Git и pre-commit.
 
-Это сведения и допущения прежней среды, а не проверка текущего состояния
-и не разрешение на внешние действия. `None configured` означает отсутствие
-сведений в исходной настройке. Утверждение об открытом интернете и отсутствии
-изоляции относится к прежней среде Claude Code: текущие ограничения Codex
-определяются фактической средой и профилем песочницы. Сведения о ветках,
-видимости репозитория, шифровании сессии и инфраструктуре при необходимости
-проверяй без чтения секретов и закрытых пользовательских данных.
-
+Единственный известный доверенный remote — репозиторий
+`github.com:bobronaud/auto-giga-recruiter.git`. Видимость, защищённость веток,
+облачная инфраструктура и деплой не подтверждены. Не предполагай, что
+репозиторий публичный, интернет не ограничен или песочница отключена.
 Публичные paste/gist-сервисы не считаются доверенными получателями данных.
-Не раскрывай содержимое `.env`, персональных резюме и сессий Telegram.
-
-### Org-wide
-**Organization**: None configured
-**Cloud provider(s)**: None configured
-**Repository visibility**: not queryable here — assume private (no evidence of public visibility; repo name/remote give no indication otherwise)
-**Internal sharing / snippet hosting**: None configured — treat public paste/gist services as outside the trust boundary
-**Secrets management**: None configured — repo uses local .env (gitignored) with ANTHROPIC_API_KEY, TG_API_ID, TG_API_HASH, SESSION_PASSPHRASE; secretlint configured in package.json
-**Default / protected branches**: not queryable here (gh visibility/rulesets/branch checks returned not queryable) — treat as unknown, do not assume unprotected
-**CI/CD deploy targets**: None configured
-**Network posture**: None configured
-**Host containment**: None configured — assume Claude Code runs on an ordinary developer machine with open internet
-**Source control**: The trusted repo (github.com:bobronaud/auto-giga-recruiter.git) and its remote only — no additional orgs configured
-**Trusted internal domains**: None configured
-**Trusted cloud buckets**: None configured
-**Key internal services**: None configured
-**Internal package registry**: None configured
-**Sensitive data locations & audiences**: .env (gitignored, holds ANTHROPIC_API_KEY/TG_API_ID/TG_API_HASH/SESSION_PASSPHRASE), resumes/ directory (personal resume data used for AI interview answers), data/session.enc (Telegram session file, AES-256-GCM encrypted unless SESSION_PASSPHRASE unset, in which case stored plaintext) — share only with audiences cleared for this project's own use
-**Data retention / declassification**: None configured
-**Sensitive remote targets**: any namespace, host, or container whose name carries 'prod' or 'production' as a whole word or name segment
-**Protected deployment namespaces / environments**: None configured — fall back to the Sensitive remote targets heuristic
-**Protected IaC scopes**: IAM, RBAC, networking, quota, and node-pool resources; anything whose name or tag carries 'prod' or 'production' as a whole word or name segment
-### User-specific
-**Primary use of Claude Code**: software development (personal/hobby project — Telegram AI-interview automation CLI)
-**Trusted repo**: /home/bobro/projects/auto-giga-recruiter (remote github.com:bobronaud/auto-giga-recruiter.git), visibility unconfirmed — treat as private pending confirmation
-**Org-specific CLiS**: None configured
-**Org-specific CLIs**: None configured
+Цели с отдельным сегментом имени `prod` или `production` считай чувствительными.
