@@ -18,6 +18,13 @@ describe("redact", () => {
     expect(redact(`session=${session}`)).toContain("<session:***>");
   });
 
+  it("маскирует ключи OpenAI, включая проектные", () => {
+    for (const prefix of ["sk-", "sk-proj-", "sk-svcacct-"]) {
+      const key = prefix + "x".repeat(40);
+      expect(redact(`Ошибка авторизации: ${key}`)).not.toContain(key);
+    }
+  });
+
   it("maskPhone", () => {
     expect(maskPhone("+7 999 123-45-67")).toBe("+7******67");
   });

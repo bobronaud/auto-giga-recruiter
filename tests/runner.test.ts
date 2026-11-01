@@ -1,12 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { InterviewAction } from "../src/llm/action.js";
 import type { Brain } from "../src/llm/brain.js";
+import { TransientBrainError } from "../src/llm/brain.js";
 
-// Сценарий ответов «Claude»
+// Сценарий ответов Codex
 const script: InterviewAction[] = [];
 const prompts: string[] = [];
 const fakeBrain = (): Brain => ({
-  provider: "api",
+  provider: "codex",
   usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, requests: 0 },
   async decide(p: string) {
     prompts.push(p);
@@ -56,6 +57,43 @@ const act = (a: Partial<InterviewAction> & Pick<InterviewAction, "action">): Int
 });
 
 describe("runInterview", () => {
+  it("повторяет временную ошибку Codex и продолжает интервью", async () => {
+    vi.useFakeTimers();
+    try {
+      const cfg = configSchema.parse({ logging: { saveTranscripts: false } });
+      const ch = fakeChannel([{ text: "Расскажите об опыте" }]);
+      const b = fakeBrain();
+      const decide = vi.fn()
+        .mockRejectedValueOnce(new TransientBrainError("network disconnected"))
+        .mockResolvedValueOnce(act({ action: "finish" }));
+      b.decide = decide;
+      const request = runInterview({
+        channel: ch, cfg, brain: b, mode: "auto", transcript: new Transcript("/tmp", false),
+        signal: new AbortController().signal, noTyping: true,
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+      const result = await request;
+      expect(decide).toHaveBeenCalledTimes(2);
+      expect(decide.mock.calls[0]).toEqual(decide.mock.calls[1]);
+      expect(result.reason).toContain("интервью завершено");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("останавливается без повтора при ошибке авторизации", async () => {
+    const cfg = configSchema.parse({ logging: { saveTranscripts: false } });
+    const b = fakeBrain();
+    const decide = vi.fn().mockRejectedValue(new Error("Codex не авторизован. Выполни codex login"));
+    b.decide = decide;
+    const result = await runInterview({
+      channel: fakeChannel([{ text: "Вопрос" }]), cfg, brain: b, mode: "auto",
+      transcript: new Transcript("/tmp", false), signal: new AbortController().signal, noTyping: true,
+    });
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(result.reason).toContain("не удалось получить ответ от Codex");
+  });
+
   it("кнопка → ответ (с сокращением) → finish, лимит символов соблюдён", async () => {
     const cfg = configSchema.parse({ answers: { maxChars: 50 }, logging: { saveTranscripts: false } });
     const ch = fakeChannel([

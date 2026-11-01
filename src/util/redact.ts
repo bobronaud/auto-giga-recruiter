@@ -4,6 +4,7 @@
  */
 const patterns: Array<[RegExp, string]> = [
   [/sk-ant-[A-Za-z0-9_-]{10,}/g, "sk-ant-***"],
+  [/sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{10,}/g, "sk-***"],
   // GramJS StringSession: base64, начинается с "1", очень длинная
   [/\b1[A-Za-z0-9+/=_-]{200,}/g, "<session:***>"],
 ];

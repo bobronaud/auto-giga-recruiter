@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import Anthropic from "@anthropic-ai/sdk";
 import pc from "picocolors";
 import type { AppConfig } from "../config/schema.js";
 import { fitToLimit, type InterviewAction } from "../llm/action.js";
@@ -109,7 +108,7 @@ export async function runInterview(o: RunOptions): Promise<RunResult> {
 
     let action = await think(() => brain.decide(prompt), signal);
     if (!action) {
-      reason = signal.aborted ? "прервано пользователем (Ctrl+C)" : "не удалось получить ответ от Claude";
+      reason = signal.aborted ? "прервано пользователем (Ctrl+C)" : "не удалось получить ответ от Codex";
       break;
     }
 
@@ -195,24 +194,19 @@ export async function runInterview(o: RunOptions): Promise<RunResult> {
   return { provider: brain.provider, reason, replies, clicks, durationMs: Date.now() - started, usage: brain.usage };
 }
 
-/** Запрос к Claude со спиннером и повторами при сетевых / серверных ошибках. */
+/** Запрос к Codex со спиннером и повторами при сетевых / серверных ошибках. */
 async function think(fn: () => Promise<InterviewAction>, signal: AbortSignal): Promise<InterviewAction | undefined> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     if (signal.aborted) return undefined;
     const s = p.spinner();
-    s.start("Claude думает…");
+    s.start("Codex думает…");
     try {
       const a = await fn();
       s.stop(pc.dim(`Решение: ${a.action} · ${a.reason}`));
       return a;
     } catch (err) {
-      const retryable =
-        err instanceof RefusalError ||
-        err instanceof TransientBrainError ||
-        err instanceof Anthropic.RateLimitError ||
-        err instanceof Anthropic.InternalServerError ||
-        err instanceof Anthropic.APIConnectionError;
-      s.error(pc.red(`Ошибка Claude: ${redactError(err)}`));
+      const retryable = err instanceof RefusalError || err instanceof TransientBrainError;
+      s.error(pc.red(`Ошибка Codex: ${redactError(err)}`));
       if (!retryable || attempt === 3) return undefined;
       const wait = 15_000 * attempt;
       actionLine("⏱", `повтор через ${wait / 1000} с`);

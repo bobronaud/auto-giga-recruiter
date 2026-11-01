@@ -13,6 +13,7 @@ session.enc
 **/transcripts/
 **/recon/
 **/claude-workdir/
+**/codex-workdir/
 resumes/*
 !resumes/example.md
 !resumes/README.md

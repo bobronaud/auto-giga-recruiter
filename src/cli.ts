@@ -6,13 +6,13 @@ import { Command, type Option } from "commander";
 import pc from "picocolors";
 import { Api } from "telegram";
 import { ConfigError, loadConfig, loadEnv } from "./config/load.js";
-import type { AppConfig, AppEnv } from "./config/schema.js";
+import type { AppConfig } from "./config/schema.js";
 import { SimulatedChannel } from "./interview/channel.js";
 import { BATCH, BatchState, navigateToVacancy, nextBatchVacancy, type NavigationResult } from "./interview/navigate.js";
 import { runRecon } from "./interview/recon.js";
 import { runInterview, type RunResult } from "./interview/runner.js";
-import { createBrain, resolveProvider } from "./llm/brain.js";
-import { countTokens } from "./llm/claude.js";
+import { createBrain } from "./llm/brain.js";
+import { estimateTokens } from "./llm/tokens.js";
 import { buildSystemPrompt } from "./llm/prompts.js";
 import { listResumes, pickResume, type Resume } from "./resumes/loader.js";
 import { Transcript } from "./storage/transcripts.js";
@@ -25,7 +25,7 @@ import { maskPhone, redactError } from "./util/redact.js";
 
 const program = new Command()
   .name("giga")
-  .description("Автопрохождение ИИ-интервью в ГигаРекрутере (Telegram) с помощью Claude")
+  .description("Автопрохождение ИИ-интервью в ГигаРекрутере (Telegram) с помощью Codex")
   .option("-c, --config <path>", "путь к конфигу", "config.yaml")
   .helpOption("-h, --help", "показать справку")
   .helpCommand(false);
@@ -58,10 +58,10 @@ function cfg(): LoadedConfig {
 /** Подключается выбранным драйвером, открывает чат с ботом и гарантированно закрывает всё в конце. */
 async function withChat<T>(
   fn: (chat: ChatSession["chat"], c: AppConfig) => Promise<T>,
-  opts: { requireAnthropic?: boolean; headless?: boolean } = {},
+  opts: { headless?: boolean } = {},
 ): Promise<T> {
   const c = cfg();
-  const env = loadEnv({ requireAnthropic: opts.requireAnthropic, requireTelegramApi: c.telegram.driver === "mtproto" });
+  const env = loadEnv({ requireTelegramApi: c.telegram.driver === "mtproto" });
   const s = p.spinner();
   s.start(c.telegram.driver === "web" ? "Запускаю Telegram Web…" : "Подключаюсь к Telegram…");
   const session = await openBotChat(c, env, { headless: opts.headless }).catch((err) => {
@@ -99,13 +99,13 @@ function chooseResume(c: AppConfig, explicit?: string, vacancy?: string, context
   return picked;
 }
 
-function brainFor(c: AppConfig, env: AppEnv, resume: Resume, vacancy?: string) {
+function brainFor(c: AppConfig, resume: Resume, vacancy?: string) {
   const system = buildSystemPrompt({ resume: resume.content, resumeFile: resume.file, vacancy, answers: c.answers });
-  return createBrain(c, env, system, join(c.logging.dir, "claude-workdir"));
+  return createBrain(c, system, join(c.logging.dir, "codex-workdir"));
 }
 
-function providerLabel(c: AppConfig, env: AppEnv): string {
-  return resolveProvider(c, env) === "api" ? `API (${c.llm.model})` : `подписка Claude через Claude Code (${c.llm.model})`;
+function providerLabel(c: AppConfig): string {
+  return `Codex CLI (${c.llm.model ?? "стандартная модель CLI"})`;
 }
 
 function summary(res: RunResult, transcript: Transcript) {
@@ -114,8 +114,7 @@ function summary(res: RunResult, transcript: Transcript) {
     [
       `${pc.bold("Итог:")} ${res.reason}`,
       `Ответов: ${res.replies} · нажатий: ${res.clicks} · длительность: ${formatDuration(res.durationMs)}`,
-      `Claude: ${u.requests} запросов · вход ${u.input} (+кэш чтение ${u.cacheRead}, запись ${u.cacheWrite}) · выход ${u.output} токенов` +
-        (u.costUsd ? pc.dim(` · ≈$${u.costUsd.toFixed(3)} по прайсу API${u.costUsd && res.provider === "claude-code" ? " (по подписке не списывается)" : ""}`) : ""),
+      `Codex: ${u.requests} запросов · вход ${u.input} (из них кэш ${u.cacheRead}) · выход ${u.output} токенов`,
       transcript.path ? `Транскрипт: ${pc.dim(transcript.path)}` : "",
     ]
       .filter(Boolean)
@@ -234,11 +233,10 @@ program
   .description("проверить конфиг, сессию и резюме")
   .action(async () => {
     const c = cfg();
-    const env = loadEnv();
     p.log.info(`Конфиг: ${c.__source}`);
-    p.log.info(`Драйвер: ${c.telegram.driver} · бот: @${c.bot.username} · модель: ${c.llm.model} · лимит ответа: ${c.answers.maxChars} симв. · режим: ${c.behavior.mode}`);
+    p.log.info(`Драйвер: ${c.telegram.driver} · бот: @${c.bot.username} · модель: ${c.llm.model ?? "стандартная модель CLI"} · лимит ответа: ${c.answers.maxChars} симв. · режим: ${c.behavior.mode}`);
     p.log.info(`Резюме: ${listResumes(c.resumes.dir).map((r) => r.file).join(", ") || pc.red("нет")}`);
-    p.log.info(`Claude: ${providerLabel(c, env)}`);
+    p.log.info(providerLabel(c));
     await withChat(async (chat) => {
       p.log.success(`Бот найден: ${chat.title}`);
     });
@@ -246,17 +244,13 @@ program
 
 program
   .command("resumes")
-  .description("показать резюме и их размер в токенах")
+  .description("показать резюме и приблизительный размер в токенах (локальная оценка)")
   .action(async () => {
     const c = cfg();
-    const env = loadEnv();
     const list = listResumes(c.resumes.dir);
     if (!list.length) return p.log.warn(`В ${c.resumes.dir} нет резюме`);
     for (const r of list) {
-      let tokens = "";
-      if (env.ANTHROPIC_API_KEY) {
-        tokens = ` · ${await countTokens(env.ANTHROPIC_API_KEY, c.llm.model, r.content).catch(() => "?")} токенов`;
-      }
+      const tokens = ` · ≈${estimateTokens(r.content)} токенов (локальная оценка)`;
       const isDefault = c.resumes.default === r.file ? pc.green(" (default)") : "";
       p.log.info(`${pc.bold(r.file)}${isDefault}${r.isExample ? pc.yellow(" [шаблон]") : ""} — ${r.content.length} симв.${tokens}`);
     }
@@ -290,7 +284,6 @@ program
   .option("--headful", "показать окно браузера (web-драйвер)")
   .action(async (o: { vacancy?: string; resume?: string; all?: boolean; confirm?: boolean; auto?: boolean; dryRun?: boolean; headful?: boolean }) => {
     const c = cfg();
-    const env = loadEnv();
     const mode = o.auto ? "auto" : o.confirm ? "confirm" : c.behavior.mode;
     const signal = interruptSignal();
 
@@ -299,12 +292,12 @@ program
       p.log.info("Режим симуляции: вводи сообщения интервьюера, ИИ будет отвечать. Пустая строка — конец.");
       const vacancy = o.vacancy ?? ((await askText("Вакансия (можно пусто)")) || undefined);
       const resume = chooseResume(c, o.resume, vacancy);
-      p.log.step(`Резюме: ${pc.bold(resume.file)} · режим: ${mode} · ${providerLabel(c, env)}`);
-      transcript.meta = { dryRun: true, vacancy, resume: resume.file, model: c.llm.model };
+      p.log.step(`Резюме: ${pc.bold(resume.file)} · режим: ${mode} · ${providerLabel(c)}`);
+      transcript.meta = { dryRun: true, vacancy, resume: resume.file, model: c.llm.model ?? "default" };
       const res = await runInterview({
         channel: new SimulatedChannel(),
         cfg: { ...c, behavior: { ...c.behavior, maxTurns: 1000 } },
-        brain: await brainFor(c, env, resume, vacancy),
+        brain: await brainFor(c, resume, vacancy),
         vacancy,
         mode,
         transcript,
@@ -318,13 +311,13 @@ program
       async (chat, c2) => {
         const runOne = async (nav: NavigationResult): Promise<RunResult> => {
           const resume = chooseResume(c2, o.resume, nav.vacancy, nav.context);
-          p.log.step(`Вакансия: ${pc.bold(nav.vacancy ?? "—")} · резюме: ${pc.bold(resume.file)} · режим: ${pc.bold(mode)} · ${providerLabel(c2, env)}`);
+          p.log.step(`Вакансия: ${pc.bold(nav.vacancy ?? "—")} · резюме: ${pc.bold(resume.file)} · режим: ${pc.bold(mode)} · ${providerLabel(c2)}`);
           const transcript = new Transcript(c2.logging.dir, c2.logging.saveTranscripts);
-          transcript.meta = { vacancy: nav.vacancy, resume: resume.file, model: c2.llm.model, bot: c2.bot.username };
+          transcript.meta = { vacancy: nav.vacancy, resume: resume.file, model: c2.llm.model ?? "default", bot: c2.bot.username };
           const res = await runInterview({
             channel: chat,
             cfg: c2,
-            brain: await brainFor(c2, env, resume, nav.vacancy),
+            brain: await brainFor(c2, resume, nav.vacancy),
             vacancy: nav.vacancy,
             mode,
             initialMessages: nav.messages,

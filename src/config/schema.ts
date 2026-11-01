@@ -65,19 +65,15 @@ export const configSchema = z.object({
 
   llm: z
     .object({
-      /**
-       * auto — API, если задан ANTHROPIC_API_KEY, иначе Claude Code CLI;
-       * api — Anthropic API (ключ, оплата по токенам);
-       * claude-code — локальный `claude -p` с твоей подпиской Claude (Pro/Max), ключ не нужен
-       */
-      provider: z.enum(["auto", "api", "claude-code"]).default("auto"),
-      model: z.string().default("claude-opus-5"),
-      effort: z.enum(["low", "medium", "high", "xhigh", "max"]).default("medium"),
-      maxTokens: z.number().int().positive().default(8000),
-      /** Серверный fallback на другую модель при refusal */
-      fallbacks: z.boolean().default(true),
+      /** Старые значения принимаются для совместимости; исполнение всегда через Codex CLI. */
+      provider: z.enum(["codex", "auto", "api", "claude-code"]).default("codex").transform(() => "codex" as const),
+      model: z.string().trim().min(1).optional().transform((model) => model?.startsWith("claude-") ? undefined : model),
+      effort: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]).default("medium"),
+      maxTokens: z.number().int().positive().optional(),
+      fallbacks: z.boolean().optional(),
     })
-    .default({ provider: "auto", model: "claude-opus-5", effort: "medium", maxTokens: 8000, fallbacks: true }),
+    .transform(({ provider, model, effort }) => ({ provider, model, effort }))
+    .default({ provider: "codex", model: undefined, effort: "medium" }),
 
   behavior: z
     .object({
@@ -124,8 +120,25 @@ export const envSchema = z.object({
   // Нужны только для telegram.driver = mtproto
   TG_API_ID: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().int().positive().optional()),
   TG_API_HASH: z.preprocess((v) => (v === "" ? undefined : v), z.string().min(10).optional()),
-  ANTHROPIC_API_KEY: z.string().optional(),
   SESSION_PASSPHRASE: z.preprocess((v) => (v === "" ? undefined : v), z.string().optional()),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
+
+/** Предупреждения выводятся загрузчиком, а сама схема остаётся без побочных эффектов. */
+export function legacyLlmWarnings(raw: unknown): string[] {
+  if (!raw || typeof raw !== "object" || !("llm" in raw)) return [];
+  const llm = raw.llm;
+  if (!llm || typeof llm !== "object") return [];
+  const warnings: string[] = [];
+  if ("provider" in llm && llm.provider !== "codex") {
+    warnings.push("Старый llm.provider заменён на codex. Все запросы выполняются через codex exec; обнови config.yaml.");
+  }
+  if ("model" in llm && typeof llm.model === "string" && llm.model.trim().startsWith("claude-")) {
+    warnings.push("Модель claude-* заменена стандартной моделью Codex CLI. Удали llm.model или укажи доступную модель Codex.");
+  }
+  if ("maxTokens" in llm || "fallbacks" in llm) {
+    warnings.push("llm.maxTokens и llm.fallbacks не применяются к Codex CLI. Удали эти параметры из config.yaml.");
+  }
+  return warnings;
+}

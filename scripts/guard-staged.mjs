@@ -16,7 +16,7 @@ const forbidden = [
   { re: /(^|\/)config\.ya?ml$/, why: "личный конфиг" },
   { re: /^data\//, why: "сессия / транскрипты" },
   { re: /(^|\/)session\.enc$|\.session(-journal)?$/i, why: "файл сессии Telegram" },
-  { re: /(^|\/)(browser-profile|transcripts|recon|claude-workdir)\//, why: "сессия / транскрипты" },
+  { re: /(^|\/)(browser-profile|transcripts|recon|claude-workdir|codex-workdir)\//, why: "сессия / транскрипты" },
   { re: /^resumes\//, allow: /^resumes\/(example\.md|README\.md)$/, why: "личное резюме" },
 ];
 

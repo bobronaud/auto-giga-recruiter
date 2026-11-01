@@ -31,14 +31,10 @@ answers:
     Готов выйти через 2 недели.
 
 llm:
-  # auto        — API, если в .env задан ANTHROPIC_API_KEY, иначе подписка через Claude Code
-  # claude-code — локальный `claude -p` по твоей подписке Claude (Pro/Max), ключ API не нужен
-  # api         — Anthropic API по ключу, оплата по токенам
-  provider: "auto"
-  model: "claude-opus-5" # если модель недоступна на твоём тарифе — claude-sonnet-5
-  effort: "medium"       # low | medium | high | xhigh | max
-  maxTokens: 8000        # только для api
-  fallbacks: true        # только для api: серверный fallback на другую модель при отказе
+  provider: "codex"      # локальный codex exec с сохранённой авторизацией ChatGPT
+  # model: "..."         # необязательно: точный идентификатор доступной модели Codex
+                         # без model используется стандартная модель CLI, пользовательский config.toml не загружается
+  effort: "medium"       # low | medium | high | xhigh | max | ultra; поддержка зависит от модели
 
 behavior:
   mode: "auto"           # auto — без подтверждений; confirm — одобрять каждый ответ

@@ -1,7 +1,7 @@
 {
   "name": "auto-giga-recruiter",
   "version": "0.1.0",
-  "description": "CLI that passes GigaRecruiter Telegram AI interviews on your behalf using Claude and your resumes",
+  "description": "CLI that passes GigaRecruiter Telegram AI interviews on your behalf using Codex and your resumes",
   "scripts": {
     "setup": "playwright install chromium",
     "start": "tsx src/cli.ts",
@@ -19,7 +19,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.128.0",
     "@clack/prompts": "^1.8.1",
     "boxen": "^9.0.0",
     "cli-table3": "^0.6.5",

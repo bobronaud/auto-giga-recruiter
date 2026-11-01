@@ -58,7 +58,7 @@ test("does not run the scanner for an empty index", async (t) => {
 });
 
 test("blocks private paths before the scanner can read them", async (t) => {
-  const files = [".env", "config.yaml", "data/session.enc", "resumes/private.md", "nested/browser-profile/cookies"];
+  const files = [".env", "config.yaml", "data/session.enc", "resumes/private.md", "nested/browser-profile/cookies", "nested/codex-workdir/request/instructions.md", "nested/claude-workdir/session.json"];
   const result = await check(t, files);
   assert.notEqual(result.status, 0);
   assert.equal(result.scanned, null);

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import dotenv from "dotenv";
 import YAML from "yaml";
 import { z } from "zod";
-import { configSchema, envSchema, type AppConfig, type AppEnv } from "./schema.js";
+import { configSchema, envSchema, legacyLlmWarnings, type AppConfig, type AppEnv } from "./schema.js";
 
 export class ConfigError extends Error {}
 
@@ -36,6 +36,7 @@ export function loadConfig(path = "config.yaml"): AppConfig & { __source: string
       `logging.dir «${cfg.logging.dir}» не в .gitignore: там хранятся сессия Telegram и транскрипты. Добавь папку в .gitignore или укажи ./data`,
     );
   }
+  for (const warning of legacyLlmWarnings(raw)) console.warn(`⚠ ${warning}`);
   return Object.assign(cfg, { __source: source });
 }
 
@@ -56,7 +57,7 @@ export function isGitIgnored(dir: string): boolean {
   }
 }
 
-export function loadEnv(opts: { requireAnthropic?: boolean; requireTelegramApi?: boolean } = {}): AppEnv {
+export function loadEnv(opts: { requireTelegramApi?: boolean } = {}): AppEnv {
   dotenv.config({ quiet: true });
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
@@ -69,9 +70,6 @@ export function loadEnv(opts: { requireAnthropic?: boolean; requireTelegramApi?:
     throw new ConfigError(
       "Для telegram.driver: mtproto нужны TG_API_ID и TG_API_HASH в .env.\n  Если получить их нельзя — используй telegram.driver: web (по умолчанию).",
     );
-  }
-  if (opts.requireAnthropic && !parsed.data.ANTHROPIC_API_KEY) {
-    throw new ConfigError("ANTHROPIC_API_KEY не задан (см. .env.example)");
   }
   return parsed.data;
 }
